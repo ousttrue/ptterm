@@ -169,10 +169,9 @@ class Process(object):
                 # that we will process max 1k/1s in case of saturation.
                 # That should be enough to prevent the UI from feeling
                 # unresponsive.
-                timestamp = time.time() + 1
 
-                self.loop.call_from_executor(
-                    do_asap, _max_postpone_until=timestamp)
+                self.loop.call_later(
+                    1, do_asap)
         else:
             # End of stream. Remove child.
             self.terminal.disconnect_reader()

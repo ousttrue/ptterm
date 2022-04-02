@@ -1,7 +1,6 @@
 from __future__ import unicode_literals
 
 from prompt_toolkit.eventloop import get_event_loop
-from prompt_toolkit.eventloop.future import Future
 
 from yawinpty import Pty, SpawnConfig
 
@@ -9,7 +8,7 @@ import abc
 import os
 import six
 import time
-
+import asyncio
 from .base import Terminal
 from .win32_pipes import PipeReader, PipeWriter
 
@@ -24,7 +23,7 @@ class Win32Terminal(Terminal):
     """
     def __init__(self):
         self.pty = Pty()
-        self.ready_f = Future()
+        self.ready_f = asyncio.Future()
         self._input_ready_callbacks = []
         self.loop = get_event_loop()
 

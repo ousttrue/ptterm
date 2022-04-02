@@ -204,6 +204,7 @@ class BetterScreen(object):
         self.wrapped_lines = []  # List of line indexes that were wrapped.
 
         self._attrs = Attrs(
+            strike=True,
             color=None, bgcolor=None, bold=False, underline=False,
             italic=False, blink=False, reverse=False, hidden=False)
         self._style_str = ''
@@ -1022,6 +1023,7 @@ class BetterScreen(object):
             elif not attr:
                 replace = {}
                 self._attrs = Attrs(
+                    strike=False,
                     color=None, bgcolor=None, bold=False, underline=False,
                     italic=False, blink=False, reverse=False, hidden=False)
 

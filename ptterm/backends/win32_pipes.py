@@ -6,10 +6,10 @@ from __future__ import unicode_literals
 from ctypes import c_int, c_long, c_ulong, c_void_p, byref, c_char_p, Structure, Union, py_object, POINTER, pointer
 from ctypes import windll
 from ctypes.wintypes import HANDLE, ULONG, DWORD, BOOL
-from prompt_toolkit.eventloop import get_event_loop, ensure_future, From, Future
-from prompt_toolkit.eventloop.event import Event
+from prompt_toolkit.utils import Event
+from prompt_toolkit.input.win32 import _Win32Handles
 import ctypes
-
+import asyncio
 
 __all__ = [
     'PipeReader',
@@ -79,45 +79,41 @@ class PipeReader(object):
         if self.handle == INVALID_HANDLE_VALUE:
             error_code = windll.kernel32.GetLastError()
             raise Exception('Invalid pipe handle. Error code=%r.' % error_code)
+        self._win32_handles = _Win32Handles()
 
         # Create overlapped structure and event.
         self._overlapped = OVERLAPPED()
-        self._event = windll.kernel32.CreateEventA(
+        self._event = HANDLE(windll.kernel32.CreateEventA(
             None,  # Default security attributes.
             BOOL(True),  # Manual reset event.
             BOOL(True),  # initial state = signaled.
             None  # Unnamed event object.
-        )
+        ))
         self._overlapped.hEvent = self._event
 
-        self._reading = Event()
-
         # Start reader coroutine.
-        ensure_future(self._async_reader())
+        asyncio.ensure_future(self._async_reader())
 
-    def _wait_for_event(self):
+    async def _wait_for_event(self):
         """
         Wraps a win32 event into a `Future` and wait for it.
         """
-        f = Future()
+        f = asyncio.Future()
 
         def ready():
-            get_event_loop().remove_win32_handle(self._event)
+            self._win32_handles.remove_win32_handle(self._event)
             f.set_result(None)
 
-        get_event_loop().add_win32_handle(self._event, ready)
+        self._win32_handles.add_win32_handle(self._event, ready)
 
-        return f
+        return await f
 
-    def _async_reader(self):
+    async def _async_reader(self):
         buffer_size = 65536
         c_read = DWORD()
         buffer = ctypes.create_string_buffer(buffer_size + 1)
 
         while True:
-            # Wait until `start_reading` is called.
-            yield From(self._reading.wait())
-
             # Call read.
             success = windll.kernel32.ReadFile(
                 self.handle,
@@ -135,7 +131,7 @@ class PipeReader(object):
                 # Pending I/O. Wait for it to finish.
                 if error_code == ERROR_IO_PENDING:
                     # Wait for event.
-                    yield From(self._wait_for_event())
+                    await self._wait_for_event()
 
                     # Get pending data.
                     success = windll.kernel32.GetOverlappedResult(
@@ -155,10 +151,10 @@ class PipeReader(object):
                     return
 
     def start_reading(self):
-        self._reading.set()
+        pass
 
     def stop_reading(self):
-        self._reading.clear()
+        pass
 
 
 class PipeWriter(object):
