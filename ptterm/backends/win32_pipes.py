@@ -6,10 +6,10 @@ from __future__ import unicode_literals
 from ctypes import c_int, c_long, c_ulong, c_void_p, byref, c_char_p, Structure, Union, py_object, POINTER, pointer
 from ctypes import windll
 from ctypes.wintypes import HANDLE, ULONG, DWORD, BOOL
-from prompt_toolkit.utils import Event
 from prompt_toolkit.input.win32 import _Win32Handles
 import ctypes
 import asyncio
+import io
 
 __all__ = [
     'PipeReader',
@@ -94,6 +94,9 @@ class PipeReader(object):
         # Start reader coroutine.
         asyncio.ensure_future(self._async_reader())
 
+        self.stop = True
+        self.pending = io.StringIO()
+
     async def _wait_for_event(self):
         """
         Wraps a win32 event into a `Future` and wait for it.
@@ -124,7 +127,7 @@ class PipeReader(object):
 
             if success:
                 buffer[c_read.value] = b'\0'
-                self.read_callback(buffer.value.decode('utf-8', 'ignore'))
+                self.on_read(buffer.value)
 
             else:
                 error_code = windll.kernel32.GetLastError()
@@ -142,7 +145,7 @@ class PipeReader(object):
 
                     if success:
                         buffer[c_read.value] = b'\0'
-                        self.read_callback(buffer.value.decode('utf-8', 'ignore'))
+                        self.on_read(buffer.value)
 
                 elif error_code == ERROR_BROKEN_PIPE:
                     self.stop_reading()
@@ -151,11 +154,23 @@ class PipeReader(object):
                     return
 
     def start_reading(self):
-        pass
+        if self.stop:
+            text = self.pending.getvalue()
+            if text:
+                self.read_callback(text)
+                # clear
+                self.pending.read()
+                self.stop = False
 
     def stop_reading(self):
-        pass
+        self.stop = True
 
+    def on_read(self, value):
+        text = value.decode('utf-8', 'ignore')
+        if self.stop:
+            self.pending.write(text)
+        else:
+            self.read_callback(text)
 
 class PipeWriter(object):
     """
